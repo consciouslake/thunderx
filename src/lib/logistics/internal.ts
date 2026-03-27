@@ -34,7 +34,26 @@ export class InternalLogisticsClient {
     const { getShopify } = await import("@/lib/shopify");
     const shopify = getShopify();
 
-    // 1. Update the local DB
+    // 1. Get the order to find which shop it belongs to
+    const initialOrder = await db.order.findUnique({
+      where: { id: orderId },
+      select: { shop: true, shopifyFulfillmentId: true, awb: true }
+    });
+
+    if (!initialOrder) throw new Error("Order not found");
+
+    // 2. Get the session for this shop
+    const session = await db.session.findFirst({
+      where: { shop: initialOrder.shop },
+    });
+
+    if (!session) throw new Error(`No session found for shop ${initialOrder.shop}`);
+
+    const client = new shopify.clients.Graphql({
+      session: session as any,
+    });
+
+    // 3. Update the local DB
     const order = await db.order.update({
       where: { id: orderId },
       data: {
@@ -43,7 +62,7 @@ export class InternalLogisticsClient {
       },
     });
 
-    // 2. Add tracking event
+    // 4. Add tracking event
     await db.trackingEvent.create({
       data: {
         orderId,
@@ -54,9 +73,9 @@ export class InternalLogisticsClient {
       },
     });
 
-    // 3. Push tracking info update to Shopify
+    // 5. Push tracking info update to Shopify
     if (order.shopifyFulfillmentId && order.awb) {
-      await shopify.request(`
+      const mutation = `
         mutation updateTracking(
           $fulfillmentId: ID!
           $trackingInfoInput: FulfillmentTrackingInput!
@@ -69,7 +88,9 @@ export class InternalLogisticsClient {
             userErrors { field message }
           }
         }
-      `, {
+      `;
+
+      await client.request(mutation, {
         variables: {
           fulfillmentId: order.shopifyFulfillmentId,
           trackingInfoInput: {

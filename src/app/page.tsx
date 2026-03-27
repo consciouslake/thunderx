@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
   Package, 
@@ -12,19 +13,30 @@ import {
   AlertCircle 
 } from "lucide-react";
 
-export default function OrdersPage() {
+function DashboardContent() {
+  const searchParams = useSearchParams();
+  const shop = searchParams.get("shop");
+  
   const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [shopInput, setShopInput] = useState("");
 
   useEffect(() => {
-    fetchOrders();
-  }, []);
+    if (shop) {
+      fetchOrders();
+    }
+  }, [shop]);
 
   const fetchOrders = async () => {
+    if (!shop) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/orders");
+      const res = await fetch(`/api/orders?shop=${shop}`);
+      if (res.status === 401) {
+        window.location.href = `/api/auth?shop=${shop}`;
+        return;
+      }
       const data = await res.json();
       setOrders(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -40,6 +52,13 @@ export default function OrdersPage() {
     setSyncing(false);
   };
 
+  const handleConnect = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shopInput) return;
+    const cleanShop = shopInput.replace("https://", "").replace("http://", "").split("/")[0];
+    window.location.href = `/api/auth?shop=${cleanShop}`;
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "PENDING": return <Clock className="w-4 h-4 text-amber-500" />;
@@ -50,13 +69,49 @@ export default function OrdersPage() {
     }
   };
 
+  if (!shop) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
+          <div className="flex justify-center mb-6">
+            <div className="bg-indigo-100 p-4 rounded-full">
+              <Package className="w-12 h-12 text-indigo-600" />
+            </div>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 text-center mb-2">Connect your Store</h1>
+          <p className="text-slate-500 text-center mb-8">Enter your Shopify store URL to start managing logistics.</p>
+          
+          <form onSubmit={handleConnect} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Store URL</label>
+              <input 
+                type="text" 
+                placeholder="your-store.myshopify.com"
+                value={shopInput}
+                onChange={(e) => setShopInput(e.target.value)}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+                required
+              />
+            </div>
+            <button 
+              type="submit"
+              className="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 transition shadow-lg shadow-indigo-200"
+            >
+              Continue to Shopify
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 p-8">
       <div className="max-w-6xl mx-auto">
         <header className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Orders Sync Dashboard</h1>
-            <p className="text-slate-500">Manage Shopify orders and tracking IDs</p>
+            <p className="text-slate-500">Connected to <span className="font-semibold text-indigo-600">{shop}</span></p>
           </div>
           <button 
             onClick={syncOrders}
@@ -121,7 +176,7 @@ export default function OrdersPage() {
                     </td>
                     <td className="px-6 py-4">
                       <Link 
-                        href={`/orders/${order.id}`}
+                        href={`/orders/${order.id}?shop=${shop}`}
                         className="text-indigo-600 hover:text-indigo-900 flex items-center gap-1 font-medium text-sm"
                       >
                         Details
@@ -136,5 +191,13 @@ export default function OrdersPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-500">Loading dashboard...</div>}>
+      <DashboardContent />
+    </Suspense>
   );
 }

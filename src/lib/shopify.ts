@@ -1,9 +1,18 @@
-import { createAdminApiClient } from "@shopify/admin-api-client";
+import { shopifyApi, ApiVersion } from "@shopify/shopify-api";
+import "@shopify/shopify-api/adapters/web-api";
+
+let shopifyInstance: ReturnType<typeof shopifyApi> | null = null;
 
 export const getShopify = () => {
-  return createAdminApiClient({
-    storeDomain: process.env.SHOPIFY_STORE_DOMAIN || "",
-    apiVersion: "2025-01",
-    accessToken: process.env.SHOPIFY_ACCESS_TOKEN || "",
-  });
+  if (!shopifyInstance) {
+    shopifyInstance = shopifyApi({
+      apiKey: process.env.SHOPIFY_API_KEY || "",
+      apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
+      scopes: ["read_orders", "write_fulfillments", "read_fulfillments"],
+      hostName: process.env.APP_URL?.replace(/https?:\/\//, "") || "localhost:3000",
+      apiVersion: ApiVersion.October24, // Using a widely supported stable version
+      isEmbeddedApp: false,
+    });
+  }
+  return shopifyInstance;
 };

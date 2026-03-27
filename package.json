@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma db push && next build",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate"
@@ -12,6 +12,8 @@
   "dependencies": {
     "@prisma/client": "^6.19.2",
     "@shopify/admin-api-client": "^1.1.2",
+    "@shopify/shopify-api": "^13.0.0",
+    "@shopify/shopify-app-session-storage-prisma": "^9.0.0",
     "lucide-react": "^1.7.0",
     "next": "16.2.1",
     "react": "19.2.4",

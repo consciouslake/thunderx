@@ -6,6 +6,13 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const shop = searchParams.get("shop");
+
+  if (!shop) {
+    return NextResponse.json({ error: "Missing shop parameter" }, { status: 400 });
+  }
+
   const shopify = getShopify();
   const db = getDb();
   try {
@@ -14,6 +21,20 @@ export async function POST(req: Request) {
     if (!orderId) {
       return NextResponse.json({ error: "Order ID is required" }, { status: 400 });
     }
+
+    // 1. Get the session for this shop
+    const session = await db.session.findFirst({
+      where: { shop },
+    });
+
+    if (!session || !session.accessToken) {
+      return NextResponse.json({ error: "Unauthorized. Please install the app." }, { status: 401 });
+    }
+
+    // Initialize a temporary authenticated client for this request
+    const client = new shopify.clients.Graphql({
+      session: session as any,
+    });
 
     // 1. Get order from DB
     const order = await db.order.findUnique({ where: { id: orderId } });
@@ -60,7 +81,7 @@ export async function POST(req: Request) {
       }
     `;
 
-    const { data, errors } = await shopify.request(mutation, {
+    const response = await client.request(mutation, {
       variables: {
         fulfillment: {
           lineItemsByFulfillmentOrder: [
@@ -76,11 +97,13 @@ export async function POST(req: Request) {
       }
     });
 
-    if (errors || data?.fulfillmentCreateV2?.userErrors?.length > 0) {
-      console.error("Shopify Fulfillment Error:", errors || data.fulfillmentCreateV2.userErrors);
+    const data = response.data as any;
+
+    if (data?.fulfillmentCreateV2?.userErrors?.length > 0) {
+      console.error("Shopify Fulfillment Error:", data.fulfillmentCreateV2.userErrors);
       return NextResponse.json({ 
         error: "Failed to update Shopify fulfillment",
-        details: errors || data.fulfillmentCreateV2.userErrors 
+        details: data.fulfillmentCreateV2.userErrors 
       }, { status: 500 });
     }
 

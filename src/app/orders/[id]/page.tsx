@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, use, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { 
   ArrowLeft, 
@@ -9,26 +10,25 @@ import {
   MapPin, 
   User, 
   Calendar, 
-  ExternalLink,
-  ChevronRight,
-  AlertCircle,
-  RefreshCw
+  RefreshCw 
 } from "lucide-react";
 
-export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = use(params);
+function OrderDetailContent({ params }: { params: { id: string } }) {
+  const searchParams = useSearchParams();
+  const shop = searchParams.get("shop");
+  
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [fulfilling, setFulfilling] = useState(false);
 
   useEffect(() => {
     fetchOrder();
-  }, [resolvedParams.id]);
+  }, [params.id]);
 
   const fetchOrder = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/orders/${resolvedParams.id}`);
+      const res = await fetch(`/api/orders/${params.id}`);
       const data = await res.json();
       setOrder(data);
     } catch (error) {
@@ -39,12 +39,13 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   };
 
   const fulfillOrder = async () => {
+    if (!shop) return alert("Missing shop context");
     setFulfilling(true);
     try {
-      const res = await fetch("/api/fulfill", {
+      const res = await fetch(`/api/fulfill?shop=${shop}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: resolvedParams.id, courier: "delhivery" }),
+        body: JSON.stringify({ orderId: params.id, courier: "delhivery" }),
       });
       const data = await res.json();
       if (data.success) {
@@ -61,7 +62,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
   const updateOrderStatus = async (newStatus: string) => {
     try {
-      const res = await fetch(`/api/orders/${resolvedParams.id}/status`, {
+      const res = await fetch(`/api/orders/${params.id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
@@ -83,21 +84,22 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="min-h-screen bg-slate-50 p-8">
       <div className="max-w-4xl mx-auto">
-        <Link href="/" className="inline-flex items-center text-slate-500 hover:text-slate-900 mb-6 transition">
+        <Link href={`/?shop=${shop}`} className="inline-flex items-center text-slate-500 hover:text-slate-900 mb-6 transition">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Orders
         </Link>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Main Info */}
           <div className="md:col-span-2 space-y-6">
             <section className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900">{order.shopifyOrderName}</h2>
-                  <div className="flex items-center text-slate-500 mt-1">
+                  <div className="flex items-center text-slate-500 mt-1 text-sm">
                     <Calendar className="w-4 h-4 mr-1" />
                     {new Date(order.createdAt).toLocaleDateString()}
+                    <span className="mx-2">•</span>
+                    <span className="text-indigo-600 font-medium">{order.shop}</span>
                   </div>
                 </div>
                 <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide
@@ -135,7 +137,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                     <div className="flex-1 min-w-[200px]">
                       <label className="block text-xs font-bold text-slate-400 uppercase mb-1">New Status</label>
                       <select 
-                        id="status-select"
                         className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                         defaultValue={order.status}
                         onChange={(e) => updateOrderStatus(e.target.value)}
@@ -154,7 +155,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               )}
             </section>
 
-            {/* Tracking Timeline */}
             <section className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
               <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Tracking Timeline</h3>
               <div className="space-y-6">
@@ -165,18 +165,14 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 ) : (
                   order.trackingEvents.map((event: any, i: number) => (
                     <div key={event.id} className="relative pl-8 group">
-                      {/* Line */}
                       {i !== order.trackingEvents.length - 1 && (
                         <div className="absolute left-[11px] top-6 w-[2px] h-full bg-slate-100" />
                       )}
-                      
-                      {/* Dot */}
                       <div className={`absolute left-0 top-1.5 w-[24px] h-[24px] rounded-full flex items-center justify-center border-4 border-white shadow-sm
                         ${i === 0 ? "bg-indigo-600" : "bg-slate-300"}`} 
                       >
                         <div className="w-2 h-2 rounded-full bg-white" />
                       </div>
-
                       <div>
                         <p className={`font-bold ${i === 0 ? "text-slate-900" : "text-slate-500"}`}>
                           {event.status.replace(/_/g, " ")}
@@ -197,7 +193,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             </section>
           </div>
 
-          {/* Sidebar - Customer Info */}
           <div className="space-y-6">
             <section className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
               <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">Customer Info</h3>
@@ -224,21 +219,18 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 </div>
               </div>
             </section>
-
-            <section className="bg-indigo-900 p-6 rounded-xl shadow-sm text-white">
-              <div className="flex items-center gap-2 mb-4">
-                <Truck className="w-5 h-5 opacity-80" />
-                <h3 className="text-sm font-bold uppercase tracking-wider">Logistics Tips</h3>
-              </div>
-              <ul className="text-sm space-y-3 opacity-90 leading-relaxed">
-                <li>• Estimated delivery: 3-5 business days.</li>
-                <li>• Ensure pincode matches the city.</li>
-                <li>• Weight is set to default 0.5kg.</li>
-              </ul>
-            </section>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-500">Loading order details...</div>}>
+      <OrderDetailContent params={resolvedParams} />
+    </Suspense>
   );
 }

@@ -4,12 +4,34 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const shop = searchParams.get("shop");
+
+  if (!shop) {
+    return NextResponse.json({ error: "Missing shop parameter" }, { status: 400 });
+  }
+
   const shopify = getShopify();
   const db = getDb();
+  
   try {
-    // 1. Fetch unfulfilled and paid orders from Shopify
-    const query = `
+    // 1. Get the session for this shop
+    const session = await db.session.findFirst({
+      where: { shop },
+    });
+
+    if (!session || !session.accessToken) {
+      return NextResponse.json({ error: "Unauthorized. Please install the app." }, { status: 401 });
+    }
+
+    // Initialize a temporary authenticated client for this request
+    const client = new shopify.clients.Graphql({
+      session: session as any,
+    });
+
+    // 2. Fetch unfulfilled and paid orders from Shopify
+    const graphqlQuery = `
       query {
         orders(first: 50, query: "fulfillment_status:unfulfilled financial_status:paid") {
           edges {
@@ -40,12 +62,8 @@ export async function GET() {
       }
     `;
 
-    const { data, errors } = await shopify.request(query);
-
-    if (errors) {
-      console.error("Shopify API Error:", errors);
-      return NextResponse.json({ error: "Failed to fetch orders from Shopify" }, { status: 500 });
-    }
+    const response = await client.request(graphqlQuery);
+    const data = response.data as any;
 
     const shopifyOrders = data.orders.edges.map((e: any) => e.node);
 
@@ -60,9 +78,11 @@ export async function GET() {
         update: {
           fulfillmentOrderId: fulfillmentOrderId,
           shopifyOrderName: o.name,
+          shop: shop, // Update shop just in case
         },
         create: {
           shopifyOrderId: o.id,
+          shop: shop,
           shopifyOrderName: o.name,
           fulfillmentOrderId: fulfillmentOrderId,
           customerName: o.shippingAddress?.name ?? o.email ?? "Unknown",
