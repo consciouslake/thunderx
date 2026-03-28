@@ -45,10 +45,10 @@ export async function GET(req: Request) {
       session: session as any,
     });
 
-    // 2. Fetch unfulfilled and paid orders from Shopify
+    // 2. Fetch unfulfilled orders from Shopify
     const graphqlQuery = `
       query {
-        orders(first: 50, query: "fulfillment_status:unfulfilled financial_status:paid") {
+        orders(first: 50, query: "fulfillment_status:unfulfilled") {
           edges {
             node {
               id
@@ -63,7 +63,7 @@ export async function GET(req: Request) {
                 zip
                 country
               }
-              fulfillmentOrders(first: 1) {
+              fulfillmentOrders(first: 5) {
                 edges {
                   node {
                     id
@@ -77,12 +77,13 @@ export async function GET(req: Request) {
       }
     `;
 
-    console.log(`Syncing orders for sanitized shop: ${shop}...`);
+    console.log(`[SYNC] Fetching orders for shop: ${shop}...`);
+
     let response: any;
     try {
       response = await client.request(graphqlQuery);
     } catch (gqlErr: any) {
-      console.error("Shopify Sync Request Failed:", gqlErr.message);
+      console.error("[SYNC] Shopify Sync Request Failed:", gqlErr.message);
       // Fallback: return existing orders from DB if Shopify API fails
       const orders = await db.order.findMany({ 
         where: { shop: { equals: shop, mode: 'insensitive' } }, 
@@ -92,16 +93,24 @@ export async function GET(req: Request) {
     }
     
     const shopifyOrders = response?.data?.orders?.edges?.map((e: any) => e.node) || [];
+    console.log(`[SYNC] Found ${shopifyOrders.length} unfulfilled orders in Shopify.`);
 
     // 3. Upsert into local DB
     for (const o of shopifyOrders) {
       try {
-        const fulfillmentOrderId = o.fulfillmentOrders?.edges?.[0]?.node?.id;
+        // Find the first 'OPEN' fulfillment order
+        const fulfillmentOrder = o.fulfillmentOrders?.edges?.find(
+          (e: any) => e.node.status === "OPEN" || e.node.status === "IN_PROGRESS"
+        )?.node;
+        
+        const fulfillmentOrderId = fulfillmentOrder?.id;
         
         if (!fulfillmentOrderId) {
-          console.warn(`Skipping order ${o.name}: No fulfillment order found.`);
+          console.warn(`[SYNC] Skipping order ${o.name}: No active fulfillment order found (Status: ${o.fulfillmentOrders?.edges?.[0]?.node?.status})`);
           continue;
         }
+
+        console.log(`[SYNC] Processing order ${o.name} (FulfillmentOrderId: ${fulfillmentOrderId})`);
 
         await db.order.upsert({
           where: { shopifyOrderId: o.id },
@@ -125,7 +134,7 @@ export async function GET(req: Request) {
           },
         });
       } catch (orderErr) {
-        console.error(`Error syncing individual order ${o.name}:`, orderErr);
+        console.error(`[SYNC] Error syncing individual order ${o.name}:`, orderErr);
       }
     }
 
@@ -135,9 +144,10 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "desc" },
     });
 
+    console.log(`[SYNC] Returning ${orders.length} orders from DB for ${shop}.`);
     return NextResponse.json(safeJson(orders));
   } catch (error: any) {
-    console.error("Critical Route Error:", error);
+    console.error("[CRITICAL] Route Error:", error);
     return NextResponse.json({ 
       error: "Route Failure", 
       message: error.message,

@@ -44,6 +44,8 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Token exchange failed", details: tokenData }, { status: 500 });
     }
 
+    console.log("✅ ACCESS TOKEN:", tokenData.access_token);
+
     // 2. Create and store the session
     const session = new Session({
       id: `offline_${shop}`,

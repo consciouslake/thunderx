@@ -43,7 +43,11 @@ export async function POST(req: Request) {
     }
 
     if (order.awb) {
-      return NextResponse.json({ error: "Order already fulfilled" }, { status: 400 });
+      return NextResponse.json({ 
+        errors: [
+          { field: "fulfillmentOrderId", message: "Fulfillment order already fulfilled" }
+        ] 
+      }, { status: 400 });
     }
 
     // 2. Create shipment with courier → get AWB
@@ -102,9 +106,11 @@ export async function POST(req: Request) {
     if (data?.fulfillmentCreateV2?.userErrors?.length > 0) {
       console.error("Shopify Fulfillment Error:", data.fulfillmentCreateV2.userErrors);
       return NextResponse.json({ 
-        error: "Failed to update Shopify fulfillment",
-        details: data.fulfillmentCreateV2.userErrors 
-      }, { status: 500 });
+        errors: data.fulfillmentCreateV2.userErrors.map((err: any) => ({
+          field: err.field?.join(".") || "fulfillment",
+          message: err.message
+        }))
+      }, { status: 400 });
     }
 
     const shopifyFulfillmentId = data.fulfillmentCreateV2.fulfillment.id;
@@ -124,12 +130,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ 
       success: true, 
       awb, 
-      trackingUrl,
-      order: updatedOrder 
+      trackingUrl 
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Fulfillment Error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ 
+      errors: [{ field: "server", message: error.message || "Internal Server Error" }] 
+    }, { status: 500 });
   }
 }

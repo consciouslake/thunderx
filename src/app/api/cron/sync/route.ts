@@ -100,7 +100,7 @@ export async function GET(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, synced: totalSynced });
+    return NextResponse.json({ synced: totalSynced });
   } catch (error) {
     console.error("Cron Error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
