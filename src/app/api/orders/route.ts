@@ -4,6 +4,15 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+// Helper to safely serialize objects with BigInt (Prisma-friendly)
+function safeJson(data: any) {
+  return JSON.parse(
+    JSON.stringify(data, (key, value) =>
+      typeof value === "bigint" ? value.toString() : value
+    )
+  );
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const shop = searchParams.get("shop");
@@ -16,12 +25,25 @@ export async function GET(req: Request) {
   const db = getDb();
   
   try {
-    // 1. Get the session for this shop
+    // 1. Explicitly check database connection
+    try {
+      await db.$connect();
+    } catch (dbError: any) {
+      console.error("Database Connection Failed:", dbError);
+      return NextResponse.json({ 
+        error: "Database Connection Failed", 
+        message: "Your Supabase instance might be paused or the DATABASE_URL is incorrect.",
+        details: dbError.message 
+      }, { status: 500 });
+    }
+
+    // 2. Get the session for this shop
     const session = await db.session.findFirst({
       where: { shop },
     });
 
     if (!session || !session.accessToken) {
+      console.warn(`No active session found for shop: ${shop}`);
       return NextResponse.json({ error: "Unauthorized. Please install the app." }, { status: 401 });
     }
 
@@ -30,7 +52,7 @@ export async function GET(req: Request) {
       session: session as any,
     });
 
-    // 2. Fetch unfulfilled and paid orders from Shopify
+    // 3. Fetch unfulfilled and paid orders from Shopify
     const graphqlQuery = `
       query {
         orders(first: 50, query: "fulfillment_status:unfulfilled financial_status:paid") {
@@ -62,18 +84,26 @@ export async function GET(req: Request) {
       }
     `;
 
-    const response: any = await client.request(graphqlQuery);
-    
-    if (!response?.data?.orders?.edges) {
-      console.error("Invalid Shopify GraphQL Response:", response);
+    console.log(`Syncing orders for ${shop}...`);
+    let response: any;
+    try {
+      response = await client.request(graphqlQuery);
+    } catch (gqlErr: any) {
+      console.error("Shopify GraphQL Request Failed:", gqlErr);
       // If we have some orders in DB but sync failed, just return them
       const orders = await db.order.findMany({ where: { shop }, orderBy: { createdAt: "desc" } });
-      return NextResponse.json(orders);
+      return NextResponse.json(safeJson(orders));
+    }
+    
+    if (!response?.data?.orders?.edges) {
+      console.error("Invalid Shopify GraphQL Response Structure:", response);
+      const orders = await db.order.findMany({ where: { shop }, orderBy: { createdAt: "desc" } });
+      return NextResponse.json(safeJson(orders));
     }
 
     const shopifyOrders = response.data.orders.edges.map((e: any) => e.node);
 
-    // 2. Upsert into local DB
+    // 4. Upsert into local DB
     for (const o of shopifyOrders) {
       try {
         const fulfillmentOrderId = o.fulfillmentOrders?.edges?.[0]?.node?.id;
@@ -106,23 +136,23 @@ export async function GET(req: Request) {
         });
       } catch (orderErr) {
         console.error(`Failed to sync individual order ${o.name}:`, orderErr);
-        // Don't crash the whole sync if one order fails
       }
     }
 
-    // 3. Return synced orders from DB for this shop specifically
+    // 5. Return synced orders from DB for this shop specifically
     const orders = await db.order.findMany({
       where: { shop },
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(orders);
+    return NextResponse.json(safeJson(orders));
   } catch (error: any) {
-    console.error("Sync Error:", error);
+    console.error("Critical Sync Error:", error);
     return NextResponse.json({ 
-      error: "Sync Failed", 
+      error: "Critical Sync Failure", 
       message: error.message,
-      stack: process.env.NODE_ENV === "development" ? error.stack : undefined
+      // Stringify to ensure no BigInt serialization crashes
+      details: String(error)
     }, { status: 500 });
   }
 }
