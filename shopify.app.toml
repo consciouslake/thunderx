@@ -1,0 +1,21 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "5510a5e1c946e24bcd1a355f973af7e8"
+name = "Daluci Logistics"
+application_url = "https://thunderxlogitech-gdbp.vercel.app/api/auth"
+embedded = false
+
+[webhooks]
+api_version = "2026-01"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_fulfillments,write_fulfillments,read_orders"
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [ "https://thunderxlogitech-gdbp.vercel.app/api/auth/callback" ]
+
+[app_preferences]
+url = "https://thunderxlogitech-gdbp.vercel.app/api/auth"
