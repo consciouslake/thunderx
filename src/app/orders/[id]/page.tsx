@@ -112,18 +112,54 @@ function OrderDetailContent({ params }: { params: { id: string } }) {
               </div>
 
               {order.status === "PENDING" && (
-                <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-lg flex items-center justify-between">
-                  <div className="flex items-center text-indigo-700 text-sm font-medium">
-                    <Package className="w-4 h-4 mr-2" />
-                    Ready for fulfillment
+                <div className="bg-indigo-50 border border-indigo-100 p-5 rounded-xl flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center text-indigo-700 text-sm font-bold">
+                      <Package className="w-5 h-5 mr-3 text-indigo-500" />
+                      Ready for fulfillment
+                    </div>
+                    <p className="text-xs text-indigo-600/70 mt-1 ml-8">Generate AWB and notify Shopify via internal logistics</p>
                   </div>
                   <button 
                     onClick={fulfillOrder}
                     disabled={fulfilling}
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 transition disabled:opacity-50"
+                    className="bg-indigo-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-md shadow-indigo-200 hover:bg-indigo-700 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50"
                   >
-                    {fulfilling ? "Processing..." : "Create Shipment"}
+                    {fulfilling ? (
+                      <span className="flex items-center gap-2">
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Generating AWB...
+                      </span>
+                    ) : "Create Shipment"}
                   </button>
+                </div>
+              )}
+
+              {order.awb && (
+                <div className="grid grid-cols-2 gap-4 mt-8 pt-6 border-t border-slate-100">
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                      <Truck className="w-3 h-3 text-indigo-500" />
+                      Courier
+                    </p>
+                    <p className="text-sm font-bold text-slate-800 uppercase">{order.courier || "Internal"}</p>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 group">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">AWB / Tracking ID</p>
+                    <div className="flex items-center justify-between">
+                      <code className="text-sm font-mono font-bold text-indigo-600">{order.awb}</code>
+                      {order.trackingUrl && (
+                        <a 
+                          href={order.trackingUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-[10px] bg-white border border-slate-200 text-slate-500 px-2 py-1 rounded-md hover:border-indigo-300 hover:text-indigo-600 transition shadow-sm"
+                        >
+                          Track External
+                        </a>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 

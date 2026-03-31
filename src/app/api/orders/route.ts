@@ -45,10 +45,10 @@ export async function GET(req: Request) {
       session: session as any,
     });
 
-    // 2. Fetch orders from Shopify (Broadened for Debugging)
+    // 2. Fetch unfulfilled and paid orders from Shopify
     const graphqlQuery = `
       query {
-        orders(first: 50) {
+        orders(first: 50, query: "fulfillment_status:unfulfilled financial_status:paid") {
           edges {
             node {
               id

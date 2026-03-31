@@ -14,14 +14,17 @@ export class InternalLogisticsClient {
   }) {
     console.log("Creating internal shipment for:", data.orderName);
     
-    // Generate a simple unique AWB: DAL + timestamp-random
-    const timestamp = Date.now().toString().slice(-6);
+    // Generate a clean professional AWB: TX + unique identifier
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
     const random = Math.floor(1000 + Math.random() * 9000);
-    const awb = `DAL-${timestamp}-${random}`;
+    const awb = `TX-${dateStr}-${random}`;
+    
+    // We'll use the environment variable for the base URL
+    const baseUrl = process.env.APP_URL || "https://daluci-logistics.vercel.app";
     
     return {
       awb,
-      trackingUrl: `/track/${awb}`, // Internal tracking URL
+      trackingUrl: `${baseUrl}/track/${awb}`, // Full tracking URL
     };
   }
 

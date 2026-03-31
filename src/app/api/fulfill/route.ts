@@ -115,16 +115,31 @@ export async function POST(req: Request) {
 
     const shopifyFulfillmentId = data.fulfillmentCreateV2.fulfillment.id;
 
-    // 4. Update DB with AWB + fulfillment ID
-    const updatedOrder = await db.order.update({
-      where: { id: orderId },
-      data: {
-        awb,
-        trackingUrl,
-        courier,
-        shopifyFulfillmentId,
-        status: "SHIPMENT_CREATED",
-      }
+    // 4. Update DB with AWB + fulfillment ID, and create initial tracking event
+    const updatedOrder = await db.$transaction(async (tx) => {
+      const order = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          awb,
+          trackingUrl,
+          courier,
+          shopifyFulfillmentId,
+          status: "SHIPMENT_CREATED",
+        }
+      });
+
+      // Initialize the tracking timeline
+      await tx.trackingEvent.create({
+        data: {
+          orderId,
+          status: "SHIPMENT_CREATED",
+          location: "Internal Warehouse",
+          description: `Shipment created via ${courier.toUpperCase()}`,
+          timestamp: new Date(),
+        }
+      });
+
+      return order;
     });
 
     return NextResponse.json({ 
