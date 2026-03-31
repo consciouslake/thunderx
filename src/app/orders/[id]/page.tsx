@@ -149,14 +149,14 @@ function OrderDetailContent({ params }: { params: { id: string } }) {
                     <div className="flex items-center justify-between">
                       <code className="text-sm font-mono font-bold text-indigo-600">{order.awb}</code>
                       {order.trackingUrl && (
-                        <a 
-                          href={order.trackingUrl} 
+                        <Link 
+                          href={`/track/${order.awb}`} 
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="text-[10px] bg-white border border-slate-200 text-slate-500 px-2 py-1 rounded-md hover:border-indigo-300 hover:text-indigo-600 transition shadow-sm"
                         >
                           Track External
-                        </a>
+                        </Link>
                       )}
                     </div>
                   </div>
